@@ -163,6 +163,9 @@ void drawOverlay(void* raw, UINT flags) {
     // D2D's clear and the DX11 scissor must cover the same pixels.
     auto bounds=menu.open?D2D1::RectF(0,0,size.width,size.height):
         D2D1::RectF(std::floor(left),std::floor(top),std::ceil(left+width),std::ceil(top+height));
+    std::array<D2D1_RECT_F,3> panelBounds{};
+    unsigned panelCount=0;
+    if(showHealth)panelBounds[panelCount++]=bounds;
     float timerLeft=0,timerTop=0,timerScale=0;
     if(showTimers) {
         const float logicalHeight=PanelPainter::timerHeight+PanelPainter::timerStep*(g.scene.timerCount-1);
@@ -173,6 +176,7 @@ void drawOverlay(void* raw, UINT flags) {
         timerTop=std::clamp(size.height*timers.top_percent/100.f,0.f,size.height-timerHeight);
         const auto rect=D2D1::RectF(std::floor(timerLeft),std::floor(timerTop),
                                    std::ceil(timerLeft+timerWidth),std::ceil(timerTop+timerHeight));
+        panelBounds[panelCount++]=rect;
         bounds=showHealth?D2D1::RectF(std::min(bounds.left,rect.left),std::min(bounds.top,rect.top),
                                      std::max(bounds.right,rect.right),std::max(bounds.bottom,rect.bottom)):rect;
     }
@@ -192,6 +196,7 @@ void drawOverlay(void* raw, UINT flags) {
         if(!menu.open) {
             const auto rect=D2D1::RectF(std::floor(crownLeft),std::floor(crownTop),
                                        std::ceil(crownLeft+crownWidth),std::ceil(crownTop+crownHeight));
+            panelBounds[panelCount++]=rect;
             bounds=showHealth || showTimers?D2D1::RectF(std::min(bounds.left,rect.left),std::min(bounds.top,rect.top),
                 std::max(bounds.right,rect.right),std::max(bounds.bottom,rect.bottom)):rect;
         }
@@ -222,9 +227,28 @@ void drawOverlay(void* raw, UINT flags) {
     g.context->PopAxisAlignedClip();
     hr = g.context->EndDraw();
     g.context->SetTarget(nullptr);
-    const auto composite = g.surface.end(bounds);
+    // Non-overlapping panels can skip the transparent space between them. Overlaps
+    // need a single composite so the shared pixels are alpha-blended exactly once.
+    bool split=panelCount>1 && !menu.open && !showBuffBars;
+    float panelArea=0;
+    for(unsigned i=0;split && i<panelCount;++i) {
+        const auto& a=panelBounds[i];
+        panelArea+=(a.right-a.left)*(a.bottom-a.top);
+        for(unsigned j=0;j<i;++j) {
+            const auto& b=panelBounds[j];
+            if(a.left<b.right && b.left<a.right && a.top<b.bottom && b.top<a.bottom)split=false;
+        }
+    }
+    split=split && 2*panelArea<(bounds.right-bounds.left)*(bounds.bottom-bounds.top);
+    const auto composite = g.surface.end(split?std::span(panelBounds.data(),panelCount):std::span(&bounds,1));
     g.painted = check(g,hr) && check(g,composite);
 }
+#ifdef CORE_GRAPHICS_TEST
+std::array<unsigned,2> fixtureDrawCounts() {
+    auto& surface=graphics().surface;
+    return {surface.rasterCount(),surface.compositeCount()};
+}
+#endif
 void beforeResize(void* raw) {
     auto& g=graphics(); std::lock_guard guard(g.mutex);
     if (!matches(g,raw)) return;

@@ -5,7 +5,7 @@ for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\
 if not defined CORE_VS exit /b 1
 call "%CORE_VS%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
 set "CORE_OUTPUT=build"
-if "%ICEBORN_CORE_CROWN_BUILD%"=="1" set "CORE_OUTPUT=build-crown-dev17"
+if "%ICEBORN_CORE_CROWN_BUILD%"=="1" set "CORE_OUTPUT=build-crown-dev18"
 if "%ICEBORN_HUD_BUILD%"=="1" set "CORE_OUTPUT=build-hud-timers"
 if not exist "%CORE_OUTPUT%" mkdir "%CORE_OUTPUT%"
 pushd "%CORE_OUTPUT%" || exit /b 1

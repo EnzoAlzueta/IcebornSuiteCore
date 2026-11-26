@@ -3,6 +3,8 @@
 #include <dxgi.h>
 #include <d2d1_1.h>
 #include <wrl/client.h>
+#include <array>
+#include <span>
 
 namespace meter {
 // Private BGRA UI device: also works when the game's device lacks BGRA support.
@@ -23,8 +25,10 @@ class Dx11Surface {
     Ptr<ID3D11ShaderResourceView> view;
     Ptr<ID3D11RenderTargetView> target;
     UINT width=0, height=0;
-    bool published=false;
-    D2D1_RECT_F bounds{};
+    enum class Owner { producer, pendingConsumer, consumer };
+    Owner owner=Owner::producer;
+    std::array<D3D11_RECT,3> clips{};
+    unsigned clipCount{};
     unsigned composites=0;
     bool rasterReady=false;
     unsigned rasterizations=0;
@@ -33,7 +37,7 @@ public:
     HRESULT createTarget(IDXGISwapChain* chain, ID2D1DeviceContext* drawingContext, ID2D1Bitmap1** bitmap);
     void releaseTarget();
     HRESULT begin(); // S_FALSE means busy: skip UI production, never stall the game.
-    HRESULT end(const D2D1_RECT_F& region);
+    HRESULT end(std::span<const D2D1_RECT_F> regions);
     HRESULT composite();
     HRESULT reuse();
     unsigned compositeCount() const { return composites; }

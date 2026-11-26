@@ -18,47 +18,13 @@ void log(const char* fmt,...) {
     va_list args;va_start(args,fmt);vprintf(fmt,args);va_end(args);puts("");
 }
 }
-struct Input {
-    std::map<uint64_t,std::vector<char>> memory;
-    template<class T> void set(uint64_t at,const T& data) {
-        auto p=reinterpret_cast<const char*>(&data); memory[at]={p,p+sizeof(data)};
-    }
-    void monster(uint64_t c,uint64_t m,int species,float hp,float maximum) {
-        auto status=m+0x40000,health=m+0x50000;
-        set(c+0x138,m); set(m+0x1bc48,status); set(status+0x148,m); set(m+0x12280,species);
-        set(m+0x7670,health); set(health+0x60,std::array<float,2>{maximum,hp});
-    }
-};
-int32_t readMem(void* ctx,uint64_t at,void* out,uint32_t size) {
-    auto& memory=static_cast<Input*>(ctx)->memory;
-    auto i=memory.find(at);
-    if(i==memory.end() || i->second.size()!=size) return 0;
-    memcpy(out,i->second.data(),size);return 1;
-}
-void require(HRESULT hr) {
-    if(FAILED(hr)) {fprintf(stderr,"HRESULT %08lx\n",hr);exit(2);}
-}
+#include "fixture_input.hpp"
+#include "perf_fixture.hpp"
 int wmain(int argc,wchar_t** argv) {
+    if(argc==3 && std::wstring_view(argv[1])==L"--bench")return runBenchmark(argv[2]);
     if(argc<2)return 1;
     const bool chained=argc>=4;
-    auto loadMeter=[&] {
-        const auto file=std::filesystem::absolute(argv[3]);
-        const auto logfile=file.parent_path()/L"iceborne_damage_meter.log";
-        auto offset=std::filesystem::exists(logfile)?std::filesystem::file_size(logfile):0;
-        assert(LoadLibraryExW(file.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32));
-        bool ready=false;
-        for(int i=0;i<1200 && !ready;++i) {
-            MSG msg{};
-            while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)) {TranslateMessage(&msg);DispatchMessageW(&msg);}
-            std::ifstream log(logfile,std::ios::binary);
-            log.seekg(static_cast<std::streamoff>(offset));
-            std::string line;
-            while(std::getline(log,line)) if(line.find("Initialization complete.")!=std::string::npos)ready=true;
-            log.close(); if(!ready)Sleep(50);
-        }
-        assert(ready);
-    };
-    if(chained && std::wstring_view(argv[2])==L"meter-first")loadMeter();
+    if(chained && std::wstring_view(argv[2])==L"meter-first")loadFixtureMeter(argv[3]);
     Modules mods{};
     const auto file=std::filesystem::absolute(argv[1]);
     assert(!loadPanel(file.parent_path()/L"missing.dll","missing",mods));
@@ -159,7 +125,7 @@ int wmain(int argc,wchar_t** argv) {
     require(D3D11CreateDeviceAndSwapChain(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,
         &desc,&chain,&device,nullptr,&ctx));
     assert(installHooks());
-    if(chained && std::wstring_view(argv[2])==L"core-first")loadMeter();
+    if(chained && std::wstring_view(argv[2])==L"core-first")loadFixtureMeter(argv[3]);
     const bool hp=argc<=4 || std::wstring_view(argv[4])!=L"meter-only";
     initializeSettings(std::filesystem::absolute("settings-test.ini"),hp);
     BOOL originalFullscreen{};require(chain->GetFullscreenState(&originalFullscreen,nullptr));

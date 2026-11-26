@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <cstdio>
 int wmain(int argc,wchar_t** argv) {
-    if(argc!=2)return 2;
+    if(argc<2 || argc>3)return 2;
     HMODULE dinput=nullptr;
     if(std::wstring_view(argv[1])==L"combined") {
         const auto file=std::filesystem::absolute(L"dinput8.dll");
@@ -24,6 +24,10 @@ int wmain(int argc,wchar_t** argv) {
         const bool foreign=std::wstring_view(argv[1])!=L"clean";
         if(adapter && core && (!foreign || (GetModuleHandleW(L"xinput9_1_0.chain.dll") &&
                                             GetModuleHandleW(L"iceborne_damage_meter.dll")))) {
+            wchar_t selected[32768]{};
+            if(!GetModuleFileNameW(GetModuleHandleW(L"iceborn_suite_core.dll"),selected,32768))return 8;
+            if(argc==3 && std::filesystem::path(selected).parent_path().filename()!=argv[2])return 9;
+            printf("Selected runtime %ls\n",selected);
             puts("PASS root, adapter and versioned runtime loaded in isolated host");
             return std::filesystem::exists(L"nativePC/IcebornSuite/user/core-dev5.log") ? 6 : 0;
         }

@@ -69,35 +69,46 @@ HRESULT Dx11Surface::createTarget(IDXGISwapChain* chain,ID2D1DeviceContext* draw
     return drawingContext->CreateBitmapFromDxgiSurface(surface.Get(),&properties,bitmap);
 }
 void Dx11Surface::releaseTarget() {
-    target.Reset();view.Reset();consumer.Reset();producer.Reset();opened.Reset();texture.Reset();published=false;rasterReady=false;
+    if(owner==Owner::consumer)consumer->ReleaseSync(0);
+    owner=Owner::producer;
+    target.Reset();view.Reset();consumer.Reset();producer.Reset();opened.Reset();texture.Reset();rasterReady=false;
     if(uiContext)uiContext->Flush();
 }
 HRESULT Dx11Surface::begin() {
-    if(published)return S_FALSE;
+    if(owner==Owner::pendingConsumer)return S_FALSE;
+    if(owner==Owner::consumer) {
+        const HRESULT released=consumer->ReleaseSync(0);
+        if(FAILED(released))return released;
+        owner=Owner::producer;
+    }
     const HRESULT hr=producer->AcquireSync(0,0);
     if(hr==WAIT_TIMEOUT)return S_FALSE;
     return hr==S_OK?S_OK:(FAILED(hr)?hr:E_FAIL);
 }
-HRESULT Dx11Surface::end(const D2D1_RECT_F& region) {
-    bounds=region;uiContext->Flush();
+HRESULT Dx11Surface::end(std::span<const D2D1_RECT_F> regions) {
+    clipCount=0;
+    for(const auto& r:regions) {
+        clips[clipCount++]={std::max(0L,LONG(std::floor(r.left))),std::max(0L,LONG(std::floor(r.top))),
+            std::min(LONG(width),LONG(std::ceil(r.right))),std::min(LONG(height),LONG(std::ceil(r.bottom)))};
+    }
+    uiContext->Flush();
     rasterReady=true;++rasterizations;
     const HRESULT hr=producer->ReleaseSync(1);if(FAILED(hr))return hr;
-    published=true;return composite();
+    owner=Owner::pendingConsumer;
+    return composite();
 }
 HRESULT Dx11Surface::reuse() {
-    if(!rasterReady)return S_FALSE;
-    const auto acquired=begin();
-    if(acquired==S_FALSE)return composite();
-    if(FAILED(acquired))return acquired;
-    // Reuse immutable pixels; no D2D commands or producer Flush are needed.
-    const auto released=producer->ReleaseSync(1);if(FAILED(released))return released;
-    published=true;return composite();
+    return rasterReady?composite():S_FALSE;
 }
 HRESULT Dx11Surface::composite() {
-    if(!published)return S_OK;
-    const HRESULT hr=consumer->AcquireSync(1,0);
-    if(hr==WAIT_TIMEOUT)return S_OK; // Retry next frame rather than waiting on GPU.
-    if(hr!=S_OK)return FAILED(hr)?hr:E_FAIL;
+    if(owner==Owner::producer)return S_OK;
+    if(owner==Owner::pendingConsumer) {
+        const HRESULT hr=consumer->AcquireSync(1,0);
+        if(hr==WAIT_TIMEOUT)return S_OK;
+        if(hr!=S_OK)return FAILED(hr)?hr:E_FAIL;
+        // Keep ownership while the cached image is current. begin() hands it back on an edit.
+        owner=Owner::consumer;
+    }
     Ptr<ID3DDeviceContextState> previous;
     context->SwapDeviceContextState(state.Get(),&previous);
     ID3D11RenderTargetView* output=target.Get();context->OMSetRenderTargets(1,&output,nullptr);
@@ -105,21 +116,18 @@ HRESULT Dx11Surface::composite() {
     context->RSSetState(raster.Get());
     const D3D11_VIEWPORT viewport{0,0,static_cast<float>(width),static_cast<float>(height),0,1};
     context->RSSetViewports(1,&viewport);
-    const D3D11_RECT clip{
-        (std::max)(0L,static_cast<LONG>(std::floor(bounds.left))),
-        (std::max)(0L,static_cast<LONG>(std::floor(bounds.top))),
-        (std::min)(static_cast<LONG>(width),static_cast<LONG>(std::ceil(bounds.right))),
-        (std::min)(static_cast<LONG>(height),static_cast<LONG>(std::ceil(bounds.bottom)))};
-    context->RSSetScissorRects(1,&clip);
     context->IASetInputLayout(nullptr);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->VSSetShader(vertex.Get(),nullptr,0);context->PSSetShader(pixel.Get(),nullptr,0);
     ID3D11ShaderResourceView* input=view.Get();context->PSSetShaderResources(0,1,&input);
     ID3D11SamplerState* sampling=sampler.Get();context->PSSetSamplers(0,1,&sampling);
-    context->Draw(3,0);
+    for(unsigned i=0;i<clipCount;++i) {
+        context->RSSetScissorRects(1,&clips[i]);
+        context->Draw(3,0);
+    }
     // Our saved state must not retain resize-sensitive backbuffer references.
     input=nullptr;context->PSSetShaderResources(0,1,&input);context->OMSetRenderTargets(0,nullptr,nullptr);
     context->SwapDeviceContextState(previous.Get(),nullptr);
-    ++composites;published=false;
-    return consumer->ReleaseSync(0);
+    ++composites;
+    return S_OK;
 }
 }

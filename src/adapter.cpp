@@ -8,7 +8,8 @@ DWORD WINAPI start(void* module) {
         if(!n || n>=32768) return 1;
         const auto nativePC=std::filesystem::path(path).parent_path().parent_path();
         const auto runtime=nativePC/L"IcebornSuite"/L"runtime";
-        auto file=runtime/L"0.1.0-dev.17"/L"iceborn_suite_core.dll";
+        auto file=runtime/L"0.1.0-dev.18"/L"iceborn_suite_core.dll";
+        if (!std::filesystem::exists(file)) file=runtime/L"0.1.0-dev.17"/L"iceborn_suite_core.dll";
         if (!std::filesystem::exists(file)) file=runtime/L"0.1.0-dev.16"/L"iceborn_suite_core.dll";
         if (!std::filesystem::exists(file)) file=runtime/L"0.1.0-dev.15"/L"iceborn_suite_core.dll";
         if (!std::filesystem::exists(file)) file=runtime/L"0.1.0-dev.14"/L"iceborn_suite_core.dll";

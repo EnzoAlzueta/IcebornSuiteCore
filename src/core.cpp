@@ -48,7 +48,7 @@ DWORD WINAPI start(void*) {
         const auto user=suite/L"user";
         std::filesystem::create_directories(user);
         std::ofstream diagnostic(user/L"core-dev5.log",std::ios::app);
-        diagnostic<<"Core 0.1.0-dev.17: supported 421810, PID "<<GetCurrentProcessId()<<std::endl;
+        diagnostic<<"Core 0.1.0-dev.18: supported 421810, PID "<<GetCurrentProcessId()<<std::endl;
         const auto ini=user/L"core.ini";
         auto setting=[&](const wchar_t* key,int fallback,int low,int high) {
             return std::clamp(static_cast<int>(GetPrivateProfileIntW(L"panels",key,fallback,ini.c_str())),low,high);

@@ -1,0 +1,6 @@
+LIBRARY xinput9_1_0
+EXPORTS
+    XInputGetCapabilities=IdmGetCapabilities @2
+    XInputGetDSoundAudioDeviceGuids=IdmGetAudioGuids @3
+    XInputGetState=IdmGetState @4
+    XInputSetState=IdmSetState @5

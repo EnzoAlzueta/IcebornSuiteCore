@@ -1,8 +1,10 @@
 # Iceborn Suite Core
 
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/imkyril)
+
 The shared DX11 runtime for **Monster Hunter World: Iceborne**. Core loads the suite’s trackers and draws their panels and settings in the game.
 
-![Shared settings menu showing Monster Info in Spanish. HUD preview with sample data.](assets/readme/hud-detail.png)
+![Shared settings menu showing the Monster health page in English. HUD preview with sample data.](assets/readme/hud-detail.png)
 
 **0.1.0-dev.19 — DX11 release candidate.** The prepared tracker packages include this version of Core. The screenshots and Spanish gameplay check below come from that candidate. The latest runtime source on `main` is [dev.18](https://github.com/EnzoAlzueta/IcebornSuiteCore/commit/ddc766576a56b434c96e887d9139d3d3a998183d).
 
